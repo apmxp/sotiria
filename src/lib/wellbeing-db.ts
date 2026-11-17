@@ -9,6 +9,7 @@ export const SCREEN_CATEGORIES = ['Learning', 'Videos', 'Games', 'Other'] as con
 export const MOOD_VALUES = ['Joyful', 'Calm', 'Curious', 'Tired', 'Sad', 'Frustrated'] as const;
 export const REFLECTION_MAX = 2000;
 export const DEFAULT_GOAL_MINUTES = 180;
+export const DAILY_TOTAL_NOTE_PREFIX = 'sotiria:daily-total:';
 
 const recurrenceByDays: Record<RoutineDays, string> = { 'Every day': 'daily', Weekdays: 'weekdays', Weekends: 'weekends' };
 export function toRecurrence(days: RoutineDays) { return recurrenceByDays[days]; }
@@ -27,7 +28,7 @@ export type Snapshot = Pick<DemoState, 'goal' | 'usageLog' | 'screenEntries' | '
 
 interface Rows {
   goalMinutes: number | null;
-  logs: { id: string; usage_date: string; category: string; duration_minutes: number; app_name: string | null }[];
+  logs: { id: string; usage_date: string; category: string; duration_minutes: number; app_name: string | null; notes?: string | null }[];
   breaks: { completed_on: string }[];
   lessons: { key: string }[];
   activities: { key: string; completed_on: string }[];
@@ -42,10 +43,20 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 const bool = (v: unknown, fallback: boolean) => typeof v === 'boolean' ? v : fallback;
 
 export function buildSnapshot(rows: Rows): Snapshot {
-  const screenEntries: ScreenEntry[] = rows.logs.map(l => ({ id: l.id, date: l.usage_date, category: l.category as ScreenEntry['category'], minutes: l.duration_minutes, appName: l.app_name ?? '' }));
+  const totalOverrides = new Map<string, number>();
+  const detailedLogs = rows.logs.filter(log => {
+    const note = log.notes;
+    if (typeof note !== 'string' || !note.startsWith(DAILY_TOTAL_NOTE_PREFIX)) return true;
+    const minutes = Number(note.slice(DAILY_TOTAL_NOTE_PREFIX.length));
+    if (!Number.isInteger(minutes) || minutes < 0 || minutes > 1440) return true;
+    totalOverrides.set(log.usage_date, minutes);
+    return false;
+  });
+  const screenEntries: ScreenEntry[] = detailedLogs.map(l => ({ id: l.id, date: l.usage_date, category: l.category as ScreenEntry['category'], minutes: l.duration_minutes, appName: l.app_name ?? '' }));
   const usageLog: Record<string, number> = {};
   for (const e of screenEntries) usageLog[e.date] = (usageLog[e.date] ?? 0) + e.minutes;
   for (const k of Object.keys(usageLog)) usageLog[k] = round1((usageLog[k] ?? 0) / 60);
+  for (const [date, minutes] of totalOverrides) usageLog[date] = round1(minutes / 60);
   const routines: Routine[] = rows.routines.filter(r => r.is_active).map(r => ({
     id: r.id, name: r.name, time: r.scheduled_time.slice(0, 5), days: fromRecurrence(r.recurrence),
     completedOn: [...new Set(rows.completions.filter(c => c.routine_id === r.id).map(c => c.completion_date))],

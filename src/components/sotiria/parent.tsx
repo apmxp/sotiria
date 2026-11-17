@@ -11,7 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useParentView } from '@/components/demo-provider';
 import { conversationPrompts, routineDayOptions, type RoutineDays } from '@/data/demo';
-import { buildFamilyReport, categorySplit, type ParentSummary } from '@/lib/wellbeing';
+import { buildFamilyReport, type ParentSummary } from '@/lib/wellbeing';
 import { friendlyDate, dayOfMonth } from '@/lib/dates';
 import { useDraft } from '@/hooks/use-draft';
 import { AppLayout } from './layout';
@@ -130,7 +130,7 @@ export function ReportsPage() {
       <ParentStats summary={summary} />
       {view === 'week'
         ? <WeekPanel summary={summary} title="Screen-time overview" action={<ViewToggle view={view} setView={setView} />} />
-        : <Panel title="Today, by type" action={<ViewToggle view={view} setView={setView} />}>{summary.today.usage > 0 ? <UsageChart label="Today's screen time by type" data={categoryChartData(categorySplit(summary.today.usage))} /> : <p className="empty-state">{summary.childName} hasn’t added today’s screen time yet.</p>}<p className="panel-subtitle mt-3">An illustrative split of today’s {summary.today.usage}h total. Sotiría doesn’t look inside apps.</p></Panel>}
+        : <Panel title="Today, by type" action={<ViewToggle view={view} setView={setView} />}>{summary.todaySplit.real ? <UsageChart label="Today's screen time by type" data={categoryChartData(summary.todaySplit.items)} /> : <p className="empty-state">Category breakdown unavailable because detailed entries do not reconcile with today’s saved total.</p>}<p className="panel-subtitle mt-3">Categories are shown only when the detailed entries match today’s total. Sotiría doesn’t look inside apps.</p></Panel>}
       <div className="content-grid mt-6">
         <div className="stack">
           <Panel title="The week at a glance">

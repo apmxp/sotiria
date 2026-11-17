@@ -688,6 +688,25 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_family_children: {
+        Args: { p_family_id: string }
+        Returns: {
+          avatar: string
+          display_name: string
+          family_id: string
+          id: string
+          is_active: boolean
+        }[]
+      }
+      record_daily_screen_total: {
+        Args: {
+          p_child_id: string
+          p_id: string
+          p_minutes: number
+          p_usage_date: string
+        }
+        Returns: boolean
+      }
       is_child_parent: { Args: { p_child: string }; Returns: boolean }
       is_family_parent: { Args: { p_family: string }; Returns: boolean }
       is_routine_parent: { Args: { p_routine: string }; Returns: boolean }

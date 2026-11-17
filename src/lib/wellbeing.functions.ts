@@ -10,7 +10,9 @@ import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
 import { requireChild, requireParentMode } from './identity.server';
 import { buildSnapshot, currentDay, DEFAULT_GOAL_MINUTES, MOOD_VALUES, REFLECTION_MAX, SCREEN_CATEGORIES, toRecurrence, type Snapshot } from './wellbeing-db';
+import { saveDailyTotal } from './daily-total';
 import { addDays, dayKey } from './dates';
+import { USAGE_MAX } from './wellbeing';
 
 const uuid = z.string().uuid();
 const HISTORY_DAYS = 28;
@@ -24,7 +26,7 @@ async function loadChildSnapshot(child: Awaited<ReturnType<typeof requireChild>>
   const db = await admin(); const from = since();
   const [goal, logs, breaks, lessons, acts, routines, moods, prefs] = await Promise.all([
     db.from('screen_time_goals').select('daily_limit_minutes').eq('child_id', child.id).order('effective_from', { ascending: false }).limit(1).maybeSingle(),
-    db.from('screen_time_logs').select('id,usage_date,category,duration_minutes,app_name').eq('child_id', child.id).gte('usage_date', from).order('created_at'),
+    db.from('screen_time_logs').select('id,usage_date,category,duration_minutes,app_name,notes').eq('child_id', child.id).gte('usage_date', from).order('created_at'),
     db.from('break_logs').select('completed_on').eq('child_id', child.id).gte('completed_on', from),
     db.from('lesson_progress').select('lessons!inner(key)').eq('child_id', child.id).not('completed_at', 'is', null),
     db.from('activity_completions').select('completed_on,activities!inner(key)').eq('child_id', child.id).order('completed_at', { ascending: false }).limit(200),
@@ -57,6 +59,18 @@ export const addScreenTime = createServerFn({ method: 'POST' }).inputValidator(z
   const child = await requireChild(); const db = await admin();
   const { data: row, error } = await db.from('screen_time_logs').insert({ child_id: child.id, usage_date: data.date, category: data.category, duration_minutes: data.minutes, app_name: data.appName || null, source: 'manual' }).select('id').single();
   if (error) fail('Your screen time could not be saved.', error); return { id: row!.id };
+});
+export const recordChildUsage = createServerFn({ method: 'POST' }).inputValidator(z.object({ date: currentDay, hours: z.number().min(0).max(USAGE_MAX) })).handler(async ({ data }) => {
+  const child = await requireChild(); const db = await admin();
+  const minutes = Math.round(data.hours * 60);
+  const result = await saveDailyTotal(
+    args => db.rpc('record_daily_screen_total', args),
+    child.id,
+    data.date,
+    minutes,
+  );
+  if (result.error) fail('Your screen time could not be saved.', result.error);
+  return { ok: true };
 });
 export const updateScreenTime = createServerFn({ method: 'POST' }).inputValidator(z.object({ id: uuid, ...entryFields })).handler(async ({ data }) => {
   const child = await requireChild(); const db = await admin();
@@ -139,7 +153,7 @@ export const getParentSnapshot = createServerFn({ method: 'POST' }).middleware([
   const c = child.data!;
   const [goal, logs, breaks, lessons, acts, routines, profile] = await Promise.all([
     db.from('screen_time_goals').select('daily_limit_minutes').eq('child_id', c.id).order('effective_from', { ascending: false }).limit(1).maybeSingle(),
-    db.from('screen_time_logs').select('id,usage_date,category,duration_minutes,app_name').eq('child_id', c.id).gte('usage_date', from),
+    db.from('screen_time_logs').select('id,usage_date,category,duration_minutes,app_name,notes').eq('child_id', c.id).gte('usage_date', from),
     db.from('break_logs').select('completed_on').eq('child_id', c.id).gte('completed_on', from),
     db.from('lesson_progress').select('lessons!inner(key)').eq('child_id', c.id).not('completed_at', 'is', null),
     db.from('activity_completions').select('completed_on,activities!inner(key)').eq('child_id', c.id).order('completed_at', { ascending: false }).limit(200),

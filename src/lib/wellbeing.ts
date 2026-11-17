@@ -54,11 +54,11 @@ export function categorySplit(hours: number) {
 
 export function entriesOn(state: DemoState, date: string) { return (state.screenEntries ?? []).filter(e => e.date === date); }
 
-/** Real split from the child's own entries when the day has any; otherwise the illustrative split. */
+/** A category breakdown is available only when detailed entries reconcile with the daily total. */
 export function daySplit(state: DemoState, date: string) {
   const entries = entriesOn(state, date);
-  if (!entries.length) return { real: false, items: categorySplit(usageOn(state, date)) };
   const total = entries.reduce((sum, e) => sum + e.minutes, 0);
+  if (!entries.length || total !== Math.round(usageOn(state, date) * 60)) return { real: false, items: [] };
   return { real: true, items: sampleCategorySplit.map(({ label }) => { const minutes = entries.filter(e => e.category === label).reduce((sum, e) => sum + e.minutes, 0); return { label, minutes, share: total ? minutes / total : 0 }; }) };
 }
 

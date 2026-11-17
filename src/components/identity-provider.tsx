@@ -42,7 +42,7 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     if (childSessionFailed) void router.navigate({ to: '/child-login', replace: true });
   }, [childSessionFailed, router]);
 
-  const childrenList = Array.isArray(family.data?.children) ? (family.data.children as Array<{ id: string }>) : [];
+  const childrenList = Array.isArray(family.data?.children) ? family.data.children.filter(child => typeof child.id === 'string') : [];
   const defaultChildId = childrenList[0]?.id;
   const activeChildId = selected ?? defaultChildId ?? 'none';
   const parentUserId = user?.id ?? (ready ? 'none' : 'loading');

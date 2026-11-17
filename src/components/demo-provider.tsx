@@ -13,7 +13,7 @@ const STORAGE_KEY = 'sotiria-demo-v2';
 const LEGACY_KEYS = ['sotiria-demo-v1'];
 
 /** Settings and profile fields that may be patched directly. */
-type EditableFields = Pick<DemoState, 'breakReminders' | 'childNotifications' | 'weeklySummary' | 'consent'>;
+type EditableFields = Pick<DemoState, 'breakReminders' | 'childNotifications' | 'weeklySummary' | 'consent' | 'lastRole'>;
 export interface ScreenEntryInput { category: ScreenCategory; minutes: number; appName: string }
 
 interface DemoContextValue {
@@ -26,6 +26,7 @@ interface DemoContextValue {
   addScreenEntry: (input: ScreenEntryInput) => void;
   updateScreenEntry: (id: string, input: ScreenEntryInput) => void;
   deleteScreenEntry: (id: string) => void;
+  recordUsage: (hours: number) => void;
   setGoal: (goal: number) => void;
   saveMood: (mood: Mood, reflection?: string) => void;
   deleteMood: (date: string) => void;
@@ -86,6 +87,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
   const parentSnapshot = useServerFn(api.getParentSnapshot);
   const fns = {
     addScreen: useServerFn(api.addScreenTime), updateScreen: useServerFn(api.updateScreenTime), deleteScreen: useServerFn(api.deleteScreenTime),
+    recordUsage: useServerFn(api.recordChildUsage),
     recordBreak: useServerFn(api.recordBreak), undoBreak: useServerFn(api.undoLastBreak),
     saveMood: useServerFn(api.saveChildMood), deleteMood: useServerFn(api.deleteChildMood),
     lesson: useServerFn(api.saveLessonProgress), activity: useServerFn(api.completeChildActivity),
@@ -99,7 +101,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     queryKey,
     queryFn: async () => isChild ? (await childSpace()).snapshot : parentSnapshot({ data: { childId: parentChildId! } }),
     enabled: isChild || isParent,
-    initialData: isChild ? identity.childSnapshot : undefined,
+    ...(isChild && identity.childSnapshot ? { initialData: identity.childSnapshot } : {}),
     staleTime: 15_000,
     retry: 1,
   });
@@ -176,6 +178,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       addScreenEntry: input => run(prev => rules.addScreenEntry(prev, { id: crypto.randomUUID(), date: today, ...input }), asChild(() => fns.addScreen({ data: { date: today, category: input.category, minutes: input.minutes, ...(input.appName.trim() ? { appName: input.appName.trim() } : {}) } }))),
       updateScreenEntry: (id, input) => run(prev => rules.updateScreenEntry(prev, id, input), asChild(() => fns.updateScreen({ data: { id, category: input.category, minutes: input.minutes, ...(input.appName.trim() ? { appName: input.appName.trim() } : {}) } }))),
       deleteScreenEntry: id => run(prev => rules.deleteScreenEntry(prev, id), asChild(() => fns.deleteScreen({ data: { id } }))),
+      recordUsage: hours => run(prev => rules.recordUsage(prev, today, hours), asChild(() => fns.recordUsage({ data: { date: today, hours } }))),
       setGoal: goal => run(prev => rules.setGoal(prev, goal), asParent(() => fns.goal({ data: { childId: parentChildId!, hours: goal } }))),
       saveMood: (mood, reflection) => run(prev => rules.saveMood(prev, today, mood, reflection), asChild(() => fns.saveMood({ data: { date: today, mood, ...(reflection !== undefined ? { reflection } : {}) } }))),
       deleteMood: date => run(prev => rules.deleteMood(prev, date), asChild(() => fns.deleteMood({ data: { date } }))),
