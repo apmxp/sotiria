@@ -24,11 +24,18 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     void supabase.auth.getUser()
       .then(({ data }) => { setUser(data.user); setReady(true); })
       .catch(() => { setUser(null); setReady(true); });
-    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+        const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (!['SIGNED_IN', 'SIGNED_OUT', 'USER_UPDATED'].includes(event)) return;
-      setUser(session?.user ?? null); selectChild(undefined);
+
+      setUser(session?.user ?? null);
+      selectChild(undefined);
       void router.invalidate();
-      if (event !== 'SIGNED_OUT') void cache.invalidateQueries();
+
+      if (event === 'SIGNED_OUT') {
+        void cache.cancelQueries().finally(() => cache.clear());
+      } else {
+        void cache.invalidateQueries();
+      }
     });
     return () => data.subscription.unsubscribe();
   }, [router, cache]);

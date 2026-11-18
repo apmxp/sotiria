@@ -1,3 +1,4 @@
+
 import { Sprout, ShieldCheck, Clock3, Heart, Palette, Users, Smile, Laugh, Meh, Frown, Cloud, Sun, Shield, Mail, Footprints, MousePointer2, BookOpen, Plane, ChefHat, Blocks, TreePine, Music, Puzzle, type LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link } from '@tanstack/react-router';
@@ -9,23 +10,243 @@ import { useDemo } from '@/components/demo-provider';
 import { useDraft } from '@/hooks/use-draft';
 import { useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-export const iconMap: Record<string, LucideIcon> = { shield: Shield, mail: Mail, heart: Heart, users: Users, footprints: Footprints, mouse: MousePointer2, palette: Palette, plane: Plane, book: BookOpen, sprout: Sprout, chef: ChefHat, blocks: Blocks, tree: TreePine, music: Music, puzzle: Puzzle };
-export const moodIcons: Record<Mood, LucideIcon> = { Joyful: Laugh, Calm: Sun, Curious: Smile, Tired: Meh, Sad: Frown, Frustrated: Cloud };
-export function Brand({ compact = false }: { compact?: boolean }) { return <Link to="/" className="brand" aria-label="Sotiría home"><span className="brand-mark"><Sprout /></span>{!compact && <span className="sidebar-label">sotiría<span className="text-primary">.</span></span>}</Link>; }
+
+export const iconMap: Record<string, LucideIcon> = {
+  shield: Shield,
+  mail: Mail,
+  heart: Heart,
+  users: Users,
+  footprints: Footprints,
+  mouse: MousePointer2,
+  palette: Palette,
+  plane: Plane,
+  book: BookOpen,
+  sprout: Sprout,
+  chef: ChefHat,
+  blocks: Blocks,
+  tree: TreePine,
+  music: Music,
+  puzzle: Puzzle
+};
+
+export const moodIcons: Record<Mood, LucideIcon> = {
+  Joyful: Laugh,
+  Calm: Sun,
+  Curious: Smile,
+  Tired: Meh,
+  Sad: Frown,
+  Frustrated: Cloud
+};
+
+export function Brand({ compact = false }: { compact?: boolean }) {
+  return (
+    <Link to="/" className="brand" aria-label="Sotiría home">
+      <span className="brand-mark"><Sprout /></span>
+      {!compact && <span className="sidebar-label">sotiría<span className="text-primary">.</span></span>}
+    </Link>
+  );
+}
+
 export const featureData = [
- { title: 'Screen-Time Balance', icon: Clock3, description: 'Build healthy habits and find your everyday balance.', path: '/child/screen-time' },
- { title: 'Mood & Wellbeing', icon: Heart, description: 'Make space for your feelings, one check-in at a time.', path: '/child/mood' },
- { title: 'Online Safety', icon: ShieldCheck, description: 'Explore the digital world with confidence and care.', path: '/child/online-safety' },
- { title: 'Offline Adventures', icon: Palette, description: 'Discover the little joys beyond your screen.', path: '/child/activities' },
- { title: 'Parent Guidance', icon: Users, description: 'Support your child’s journey, together.', path: '/parent/dashboard' },
+  { title: 'Screen-Time Balance', icon: Clock3, description: 'Build healthy habits and find your everyday balance.', path: '/child/screen-time' },
+  { title: 'Mood & Wellbeing', icon: Heart, description: 'Make space for your feelings, one check-in at a time.', path: '/child/mood' },
+  { title: 'Online Safety', icon: ShieldCheck, description: 'Explore the digital world with confidence and care.', path: '/child/online-safety' },
+  { title: 'Offline Adventures', icon: Palette, description: 'Discover the little joys beyond your screen.', path: '/child/activities' },
+  { title: 'Parent Guidance', icon: Users, description: 'Support your child’s journey, together.', path: '/parent/dashboard' },
 ] as const;
-export function PageHeading({ title, subtitle, action }: { title: string; subtitle: string; action?: ReactNode }) { return <div className="page-heading"><div className="min-w-0"><h1>{title}</h1><p>{subtitle}</p></div>{action || <span className="date-label">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</span>}</div>; }
-export function Panel({ title, icon: Icon, children, className = '', action }: { title?: string; icon?: LucideIcon; children: ReactNode; className?: string; action?: ReactNode }) { return <section className={`panel ${className}`}>{title && <div className="panel-heading"><h2>{title}</h2>{action || (Icon && <Icon />)}</div>}{children}</section>; }
-export function Ring({ usage, goal }: { usage: number; goal: number }) { const { percentage } = screenBalance(usage, goal); return <div className="ring" role="img" aria-label={`${usage} hours, ${Math.round(percentage)} percent of the ${goal} hour daily goal`}><svg viewBox="0 0 120 120" aria-hidden="true"><circle className="ring-track" cx="60" cy="60" r="50" /><circle className="ring-value" cx="60" cy="60" r="50" strokeDasharray="314.159" strokeDashoffset={314.159 * (1 - percentage / 100)} /></svg><div className="ring-label"><strong>{usage}h</strong><span>of {goal}h daily goal</span></div></div>; }
-export function Progress({ value, teal = false, label }: { value: number; teal?: boolean; label?: string }) { return <div className="progress-track" role="progressbar" aria-label={label} aria-valuenow={Math.round(Math.max(0, Math.min(100, value)))} aria-valuemin={0} aria-valuemax={100}><div className={`progress-fill ${teal ? 'teal' : ''}`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>; }
-export function MoodSelector({ selected, onSelect }: { selected?: Mood | undefined; onSelect: (mood: Mood) => void }) { return <div className="mood-grid">{moods.map(mood => { const Icon = moodIcons[mood]; return <Button key={mood} variant="ghost" className="mood-option" aria-pressed={selected === mood} onClick={() => onSelect(mood)}><span className="mood-face"><Icon /></span>{mood}</Button>; })}</div>; }
-export function ScreenSummary() { const { state, today } = useDemo(); const usage = usageOn(state, today); const recorded = hasUsage(state, today); const balance = screenBalance(usage, state.goal); return <><div className="screen-summary"><Ring usage={usage} goal={state.goal} /><div><div className="stat-line"><span>Today's screen time</span><strong>{recorded ? `${usage} hours` : 'Not added yet'}</strong></div><div className="stat-line"><span>Daily goal</span><strong>{state.goal} hours</strong></div><div className="stat-line"><span>Remaining time</span><strong>{balance.remaining} hours</strong></div></div></div><div className="positive-note"><Sprout className="size-4 shrink-0" />{!recorded ? 'Add today’s total yourself on My Screen Time — this demo never tracks devices.' : usage <= state.goal ? 'A little screen time. A little real-world magic.' : 'A bigger screen day. Maybe a little adventure offline next?'}</div></>; }
+
+export function PageHeading({ title, subtitle, action }: { title: string; subtitle: string; action?: ReactNode }) {
+  return (
+    <div className="page-heading">
+      <div className="min-w-0">
+        <h1>{title}</h1>
+        <p>{subtitle}</p>
+      </div>
+      {action || <span className="date-label">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</span>}
+    </div>
+  );
+}
+
+export function Panel({ title, icon: Icon, children, className = '', action }: { title?: string; icon?: LucideIcon; children: ReactNode; className?: string; action?: ReactNode }) {
+  return (
+    <section className={`panel ${className}`}>
+      {title && (
+        <div className="panel-heading">
+          <h2>{title}</h2>
+          {action || (Icon && <Icon />)}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+export function Ring({ usage, goal }: { usage: number; goal: number }) {
+  const { percentage } = screenBalance(usage, goal);
+  return (
+    <div className="ring" role="img" aria-label={`${usage} hours, ${Math.round(percentage)} percent of the ${goal} hour daily goal`}>
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <circle className="ring-track" cx="60" cy="60" r="50" />
+        <circle className="ring-value" cx="60" cy="60" r="50" strokeDasharray="314.159" strokeDashoffset={314.159 * (1 - percentage / 100)} />
+      </svg>
+      <div className="ring-label">
+        <strong>{usage}h</strong>
+        <span>of {goal}h daily goal</span>
+      </div>
+    </div>
+  );
+}
+
+export function Progress({ value, teal = false, label }: { value: number; teal?: boolean; label?: string }) {
+  return (
+    <div className="progress-track" role="progressbar" aria-label={label} aria-valuenow={Math.round(Math.max(0, Math.min(100, value)))} aria-valuemin={0} aria-valuemax={100}>
+      <div className={`progress-fill ${teal ? 'teal' : ''}`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+    </div>
+  );
+}
+
+export function MoodSelector({ selected, onSelect }: { selected?: Mood | undefined; onSelect: (mood: Mood) => void }) {
+  return (
+    <div className="mood-grid">
+      {moods.map(mood => {
+        const Icon = moodIcons[mood];
+        return (
+          <Button key={mood} variant="ghost" className="mood-option" aria-pressed={selected === mood} onClick={() => onSelect(mood)}>
+            <span className="mood-face"><Icon /></span>
+            {mood}
+          </Button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function ScreenSummary() {
+  const { state, today } = useDemo();
+  const usage = usageOn(state, today);
+  const recorded = hasUsage(state, today);
+  const balance = screenBalance(usage, state.goal);
+
+  return (
+    <>
+      <div className="screen-summary">
+        <Ring usage={usage} goal={state.goal} />
+        <div>
+          <div className="stat-line">
+            <span>Today's screen time</span>
+            <strong>{recorded ? `${usage} hours` : 'Not added yet'}</strong>
+          </div>
+          <div className="stat-line">
+            <span>Daily goal</span>
+            <strong>{state.goal} hours</strong>
+          </div>
+          <div className="stat-line">
+            <span>Remaining time</span>
+            <strong>{balance.remaining} hours</strong>
+          </div>
+        </div>
+      </div>
+      <div className="positive-note">
+        <Sprout className="size-4 shrink-0" />
+        {!recorded
+          ? 'Add today’s total yourself on My Screen Time — this demo never tracks devices.'
+          : usage <= state.goal
+            ? 'A little screen time. A little real-world magic.'
+            : 'A bigger screen day. Maybe a little adventure offline next?'}
+      </div>
+    </>
+  );
+}
+
 /** Shared by the child and parent views: both edit the same agreed family goal. */
-export function GoalControl() { const { state, setGoal } = useDemo(); const [goal, setDraft] = useDraft<number | ''>(state.goal); return <form onSubmit={event => { event.preventDefault(); const value = Number(goal); if (goal === '' || !isValidGoal(value)) { toast.error(`Choose a daily goal between ${GOAL_MIN} and ${GOAL_MAX} hours.`); return; } setGoal(value); toast.success('The daily goal is updated for the whole family.'); }}><label className="field">Daily screen-time goal (hours)<input type="number" inputMode="decimal" min={GOAL_MIN} max={GOAL_MAX} step="0.5" value={goal} onChange={e => setDraft(e.target.value === '' ? '' : Number(e.target.value))} required /><small>Agree on a goal together. It can change as you grow. Currently {state.goal} hours.</small></label><Button type="submit" variant="wellbeing">Save goal <Check /></Button></form>; }
-export function ResetDemoButton() { const { reset } = useDemo(); const [open, setOpen] = useState(false); return <><Button variant="outline" onClick={() => setOpen(true)}><RotateCcw />Reset demo data</Button><Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogHeader><DialogTitle>Start the demo fresh?</DialogTitle><DialogDescription>This replaces everything saved in this browser — check-ins, screen time, lessons, activities, and routines — with the original sample family.</DialogDescription></DialogHeader><div className="flex flex-wrap gap-3"><Button variant="outline" onClick={() => setOpen(false)}>Keep my data</Button><Button variant="destructive" onClick={() => { reset(); setOpen(false); }}>Reset demo data</Button></div></DialogContent></Dialog></>; }
-export function FeatureGrid() { return <div className="feature-grid">{featureData.map(({ title, icon: Icon, description, path }) => <Link key={title} to={path} className="feature-card"><div className="feature-icon"><Icon /></div><h3>{title}</h3><p>{description}</p><span className="feature-arrow">Explore <span aria-hidden="true">↗</span></span></Link>)}</div>; }
+export function GoalControl() {
+  const { state, setGoal } = useDemo();
+  const [goal, setDraft] = useDraft<number | ''>(state.goal);
+
+  return (
+    <form onSubmit={event => {
+      event.preventDefault();
+      const value = Number(goal);
+      if (goal === '' || !isValidGoal(value)) {
+        toast.error(`Choose a daily goal between ${GOAL_MIN} and ${GOAL_MAX} hours.`);
+        return;
+      }
+      setGoal(value);
+      toast.success('The daily goal is updated for the whole family.');
+    }}>
+      <label className="field">
+        Daily screen-time goal (hours)
+        <input
+          type="number"
+          inputMode="decimal"
+          min={GOAL_MIN}
+          max={GOAL_MAX}
+          step="0.5"
+          value={goal}
+          onChange={e => setDraft(e.target.value === '' ? '' : Number(e.target.value))}
+          required
+        />
+        <small>Agree on a goal together. It can change as you grow. Currently {state.goal} hours.</small>
+      </label>
+      <Button type="submit" variant="wellbeing">Save goal <Check /></Button>
+    </form>
+  );
+}
+
+export function ResetDemoButton() {
+  const { reset } = useDemo();
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <Button variant="outline" onClick={() => setOpen(true)}>
+        <RotateCcw />
+        Reset demo data
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Start the demo fresh?</DialogTitle>
+            <DialogDescription>
+              This resets the sample wellbeing data saved in this browser,
+              including demo check-ins, screen time, lessons, activities,
+              and routines. It does not delete any real family accounts
+              or saved family records.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-wrap gap-3">
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Keep my data
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                reset();
+                setOpen(false);
+              }}
+            >
+              Reset demo data
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+export function FeatureGrid() {
+  return (
+    <div className="feature-grid">
+      {featureData.map(({ title, icon: Icon, description, path }) => (
+        <Link key={title} to={path} className="feature-card">
+          <div className="feature-icon"><Icon /></div>
+          <h3>{title}</h3>
+          <p>{description}</p>
+          <span className="feature-arrow">Explore <span aria-hidden="true">↗</span></span>
+        </Link>
+      ))}
+    </div>
+  );
+}

@@ -7,6 +7,10 @@
     "nodejs_compat",
     "nodejs_compat_populate_process_env"
   ],
+  "vars": {
+    "SUPABASE_URL": "https://thwmkixpwhnbufhsnsuv.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_5Sc2zz4vSq6lVMQPdWQ4dA_Lyy2OwPe"
+  },
   "observability": {
     "enabled": true
   }
