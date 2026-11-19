@@ -12,13 +12,20 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import java.io.IOException
+import java.security.GeneralSecurityException
 import java.util.Locale
 
 class MainActivity : Activity() {
+    private lateinit var pairingCredentialStore: PairingCredentialStore
+    private lateinit var pairingCodeInput: EditText
+    private lateinit var pairingStatus: TextView
+    private lateinit var pairingButton: Button
     private lateinit var accessStatus: TextView
     private lateinit var permissionGuidance: TextView
     private lateinit var summaryStatus: TextView
@@ -28,8 +35,10 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pairingCredentialStore = PairingCredentialStore(this)
         usageSummaryReader = UsageSummaryReader(this)
         setContentView(createContent())
+        refreshPairingStatus()
         refreshUsageSummary()
     }
 
@@ -89,6 +98,54 @@ class MainActivity : Activity() {
             },
             matchWidthWrapHeight()
         )
+
+        val pairingCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(16), dp(18), dp(16))
+            background = cardBackground(Color.WHITE)
+        }
+        pairingCard.addView(
+            TextView(this).apply {
+                text = "Parent setup: connect this phone"
+                textSize = 18f
+                setTextColor(0xFF245B45.toInt())
+                setTypeface(typeface, Typeface.BOLD)
+            },
+            matchWidthWrapHeight()
+        )
+        pairingCard.addView(
+            TextView(this).apply {
+                text = "Start in the parent Sotiría profile. Enter the one-time pairing code the parent shares. The phone never chooses or sends a child profile ID."
+                textSize = 14f
+                setTextColor(0xFF52645A.toInt())
+                setLineSpacing(dp(3).toFloat(), 1f)
+                setPadding(0, dp(8), 0, dp(12))
+            },
+            matchWidthWrapHeight()
+        )
+        pairingStatus = TextView(this).apply {
+            textSize = 14f
+            setTextColor(0xFF315446.toInt())
+            contentDescription = "Phone pairing status"
+        }
+        pairingCard.addView(pairingStatus, matchWidthWrapHeight())
+        pairingCodeInput = EditText(this).apply {
+            hint = "One-time pairing code"
+            singleLine = true
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+            setTextSize(15f)
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+        }
+        pairingCard.addView(pairingCodeInput, matchWidthWrapHeight())
+        pairingButton = Button(this).apply {
+            text = "Connect this phone"
+            setOnClickListener { connectPhone() }
+        }
+        pairingCard.addView(pairingButton, matchWidthWrapHeight())
+        content.addView(pairingCard, matchWidthWrapHeight().apply {
+            bottomMargin = dp(20)
+        })
 
         accessStatus = TextView(this).apply {
             textSize = 16f
@@ -184,6 +241,78 @@ class MainActivity : Activity() {
                 )
             )
         }
+    }
+
+    private fun refreshPairingStatus() {
+        if (pairingCredentialStore.hasPairedDevice()) {
+            pairingStatus.text =
+                "This phone is paired. Usage data is not being uploaded in this phase."
+            pairingCodeInput.isEnabled = false
+            pairingButton.isEnabled = false
+        }
+    }
+
+    private fun connectPhone() {
+        val pairingToken = pairingCodeInput.text.toString().trim()
+        if (!PAIRING_TOKEN_PATTERN.matches(pairingToken)) {
+            pairingStatus.text = "Enter a valid one-time pairing code."
+            return
+        }
+        if (pairingCredentialStore.hasPairedDevice()) {
+            refreshPairingStatus()
+            return
+        }
+
+        pairingStatus.text = "Connecting securely…"
+        pairingButton.isEnabled = false
+        Thread {
+            var message: String
+            var paired = false
+            try {
+                val pending = pairingCredentialStore.loadPending()
+                    ?.takeIf { it.pairingToken == pairingToken }
+                    ?: PendingPairing(
+                        pairingToken = pairingToken,
+                        pendingToken = PairingCredentialStore.newToken(),
+                        deviceToken = PairingCredentialStore.newToken(),
+                        deviceName = "Sotiría Android phone"
+                    ).also(pairingCredentialStore::savePending)
+
+                val pendingHash = PairingApiClient.sha256Hex(pending.pendingToken)
+                val deviceHash = PairingApiClient.sha256Hex(pending.deviceToken)
+                val api = PairingApiClient()
+                val redemption = api.redeem(pairingToken, pendingHash, pending.deviceName)
+                if (redemption.status != "ok" && redemption.status != "pairing_unavailable") {
+                    throw PairingApiException(redemption.status)
+                }
+
+                val activation = api.activate(pendingHash, deviceHash)
+                if (activation.status != "ok") throw PairingApiException(activation.status)
+                pairingCredentialStore.completePairing(pending.deviceToken)
+                message = "This phone is paired. Usage data is not being uploaded in this phase."
+                paired = true
+            } catch (error: PairingApiException) {
+                pairingCredentialStore.clearPending()
+                message = error.message ?: "Phone pairing could not be completed."
+            } catch (error: IllegalStateException) {
+                message = error.message ?: "Phone pairing could not be completed."
+            } catch (_: IOException) {
+                message = "The secure connection failed. Check your connection and try again."
+            } catch (_: GeneralSecurityException) {
+                message = "The phone's secure storage could not be accessed."
+            } catch (_: SecurityException) {
+                message = "The phone's secure storage could not be accessed."
+            }
+
+            runOnUiThread {
+                pairingStatus.text = message
+                pairingButton.isEnabled = !paired
+                if (paired) {
+                    pairingCodeInput.isEnabled = false
+                    pairingCodeInput.setText("")
+                }
+            }
+        }.start()
     }
 
     private fun refreshUsageSummary() {
@@ -308,4 +437,8 @@ class MainActivity : Activity() {
         )
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+
+    private companion object {
+        val PAIRING_TOKEN_PATTERN = Regex("^[A-Za-z0-9_-]{43}$")
+    }
 }

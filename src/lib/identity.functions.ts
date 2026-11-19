@@ -27,12 +27,83 @@ export const saveParentProfile = createServerFn({ method: 'POST' }).middleware([
 export const saveChildProfile = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth]).inputValidator(childInput).handler(async ({ data, context }) => {
   requireParentMode();
   if (!data.id && !data.pin) throw new Error('Choose a six-digit PIN.');
-  const membership = await context.supabase.rpc('is_family_parent', { p_family: data.familyId });
-  if (membership.error || !membership.data) throw new Error('This family is not available.');
-  const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
-  const { data: id, error } = await supabaseAdmin.rpc('manage_child', { p_user: context.userId, p_family: data.familyId, p_child: data.id ?? '00000000-0000-0000-0000-000000000000', p_name: data.displayName, p_avatar: data.avatar, p_pin: data.pin ?? '', p_active: data.active });
+  const { data: id, error } = await context.supabase.rpc('manage_child_authorized', {
+    p_family: data.familyId,
+    p_child: data.id ?? '00000000-0000-0000-0000-000000000000',
+    p_name: data.displayName,
+    p_avatar: data.avatar,
+    p_pin: data.pin ?? '',
+    p_active: data.active,
+  });
   if (error) throw new Error('This child profile could not be saved.'); return { id };
 });
+const createDevicePairingInput = z.object({
+  childId: z.string().uuid(),
+  idempotencyKeyHash: z.string().regex(/^[0-9a-f]{64}$/),
+  pairingHash: z.string().regex(/^[0-9a-f]{64}$/),
+  pairingKeyId: z.string().regex(/^[A-Za-z0-9_-]{1,32}$/),
+  requestFingerprint: z.string().regex(/^[0-9a-f]{64}$/),
+  timezone: z.string().min(1).max(100),
+}).strict();
+export const createChildDevicePairing = createServerFn({ method: 'POST' })
+  .middleware([requireSupabaseAuth])
+  .validator(createDevicePairingInput)
+  .handler(async ({ data, context }) => {
+    requireParentMode();
+    const { data: result, error } = await context.supabase.rpc('create_child_device_pairing', {
+      p_child_id: data.childId,
+      p_timezone: data.timezone,
+      p_idempotency_key_hash: data.idempotencyKeyHash,
+      p_request_fingerprint: data.requestFingerprint,
+      p_pairing_hash: data.pairingHash,
+      p_pairing_key_id: data.pairingKeyId,
+    });
+    const parsed = z.object({
+      status: z.enum(['ok', 'pairing_open', 'pairing_expired', 'child_inactive', 'pairing_unavailable', 'idempotency_conflict']),
+      pairing_id: z.string().uuid().optional(),
+      expires_at: z.string().optional(),
+      reporting_timezone: z.string().optional(),
+      retry: z.boolean().optional(),
+    }).safeParse(result);
+    if (error || !parsed.success) throw new Error('Phone pairing could not be started.');
+    if (parsed.data.status === 'pairing_open' && parsed.data.expires_at) {
+      return { status: 'pairing_open' as const, expiresAt: parsed.data.expires_at };
+    }
+    if (parsed.data.status === 'pairing_expired') {
+      return { status: 'pairing_expired' as const };
+    }
+    if (parsed.data.status !== 'ok' || !parsed.data.pairing_id || !parsed.data.expires_at || !parsed.data.reporting_timezone) {
+      throw new Error('Phone pairing could not be started. Check that the child profile is active and try again later.');
+    }
+    return {
+      status: 'ok' as const,
+      pairingId: parsed.data.pairing_id,
+      expiresAt: parsed.data.expires_at,
+      reportingTimezone: parsed.data.reporting_timezone,
+    };
+  });
+const devicePairingStatusInput = z.object({
+  childId: z.string().uuid(),
+  pairingId: z.string().uuid(),
+}).strict();
+export const getChildDevicePairingStatus = createServerFn({ method: 'POST' })
+  .middleware([requireSupabaseAuth])
+  .validator(devicePairingStatusInput)
+  .handler(async ({ data, context }) => {
+    requireParentMode();
+    const { data: result, error } = await context.supabase.rpc('get_child_device_pairing_status', {
+      p_child_id: data.childId,
+      p_pairing_id: data.pairingId,
+    });
+    const parsed = z.object({
+      status: z.enum(['pending', 'redeemed', 'activated', 'cancelled', 'expired']),
+      expires_at: z.string(),
+      device_name: z.string().nullable(),
+      activated_at: z.string().nullable(),
+    }).strict().safeParse(result);
+    if (error || !parsed.success) throw new Error('Pairing status could not be loaded.');
+    return parsed.data;
+  });
 export const openChildPicker = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth]).inputValidator(familyIdInput).handler(async ({ data, context }) => {
   requireParentMode(); const membership = await context.supabase.rpc('is_family_parent', { p_family: data.familyId });
   if (membership.error || !membership.data) throw new Error('This family is not available.');

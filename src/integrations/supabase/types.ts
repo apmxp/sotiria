@@ -636,15 +636,65 @@ export type Database = {
           },
         ]
       }
+      child_device_usage_days: {
+        Row: {
+          accepted_at: string | null
+          child_id: string
+          device_id: string
+          issue_request_hash: string
+          payload_hash: string | null
+          prepare_expires_at: string
+          reporting_timezone: string
+          revision: number
+          state: string
+          ticket_expires_at: string | null
+          ticket_hash: string | null
+          ticket_key_id: string
+          usage_date: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          child_id: string
+          device_id: string
+          issue_request_hash: string
+          payload_hash?: string | null
+          prepare_expires_at: string
+          reporting_timezone: string
+          revision: number
+          state: string
+          ticket_expires_at?: string | null
+          ticket_hash?: string | null
+          ticket_key_id: string
+          usage_date: string
+        }
+        Update: {
+          accepted_at?: string | null
+          child_id?: string
+          device_id?: string
+          issue_request_hash?: string
+          payload_hash?: string | null
+          prepare_expires_at?: string
+          reporting_timezone?: string
+          revision?: number
+          state?: string
+          ticket_expires_at?: string | null
+          ticket_hash?: string | null
+          ticket_key_id?: string
+          usage_date?: string
+        }
+        Relationships: []
+      }
       screen_time_logs: {
         Row: {
           app_name: string | null
           category: string
           child_id: string
           created_at: string
+          device_id: string | null
           duration_minutes: number
           id: string
           notes: string | null
+          package_name: string | null
           source: string
           updated_at: string
           usage_date: string
@@ -654,9 +704,11 @@ export type Database = {
           category: string
           child_id: string
           created_at?: string
+          device_id?: string | null
           duration_minutes: number
           id?: string
           notes?: string | null
+          package_name?: string | null
           source?: string
           updated_at?: string
           usage_date: string
@@ -666,9 +718,11 @@ export type Database = {
           category?: string
           child_id?: string
           created_at?: string
+          device_id?: string | null
           duration_minutes?: number
           id?: string
           notes?: string | null
+          package_name?: string | null
           source?: string
           updated_at?: string
           usage_date?: string
@@ -688,6 +742,25 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      activate_child_device_pairing: {
+        Args: { p_device_token_hash: string; p_pending_token_hash: string }
+        Returns: Json
+      }
+      create_child_device_pairing: {
+        Args: {
+          p_child_id: string
+          p_idempotency_key_hash: string
+          p_pairing_hash: string
+          p_pairing_key_id: string
+          p_request_fingerprint: string
+          p_timezone: string
+        }
+        Returns: Json
+      }
+      get_child_device_pairing_status: {
+        Args: { p_child_id: string; p_pairing_id: string }
+        Returns: Json
+      }
       get_family_children: {
         Args: { p_family_id: string }
         Returns: {
@@ -697,6 +770,19 @@ export type Database = {
           id: string
           is_active: boolean
         }[]
+      }
+      get_accepted_child_usage_dates: {
+        Args: { p_child_id: string; p_since: string }
+        Returns: { usage_date: string }[]
+      }
+      redeem_child_device_pairing: {
+        Args: {
+          p_credential_key_id: string
+          p_device_name: string
+          p_pairing_hash: string
+          p_pending_token_hash: string
+        }
+        Returns: Json
       }
       record_daily_screen_total: {
         Args: {
@@ -710,6 +796,17 @@ export type Database = {
       is_child_parent: { Args: { p_child: string }; Returns: boolean }
       is_family_parent: { Args: { p_family: string }; Returns: boolean }
       is_routine_parent: { Args: { p_routine: string }; Returns: boolean }
+      manage_child_authorized: {
+        Args: {
+          p_active: boolean
+          p_avatar: string
+          p_child: string
+          p_family: string
+          p_name: string
+          p_pin: string
+        }
+        Returns: string
+      }
       manage_child: {
         Args: {
           p_active: boolean

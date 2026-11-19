@@ -50,6 +50,22 @@ function isH3SwallowedErrorBody(body: string): boolean {
 export default {
   async fetch(request: Request, env: Env, ctx: unknown) {
     try {
+            const { pathname } = new URL(request.url);
+            if (
+              pathname === "/api/android/pairing/redeem" ||
+              pathname === "/api/android/pairing/activate"
+            ) {
+              const [{ handleAndroidPairingRequest }, { supabaseAdmin }] = await Promise.all([
+                import("./lib/android-pairing.api.server"),
+                import("./integrations/supabase/client.server"),
+              ]);
+              const response = await handleAndroidPairingRequest(request, {
+                redeem: (args) => supabaseAdmin.rpc("redeem_child_device_pairing", args),
+                activate: (args) => supabaseAdmin.rpc("activate_child_device_pairing", args),
+              });
+              if (response) return response;
+            }
+
             const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
