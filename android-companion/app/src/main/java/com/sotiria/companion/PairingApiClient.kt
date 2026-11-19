@@ -25,6 +25,10 @@ class PairingApiException(val pairingStatus: String) : IOException(
     }
 )
 
+class PairingApiResponseException(val responseCode: Int, message: String) : IOException(
+    "Pairing server returned HTTP $responseCode: $message"
+)
+
 class PairingApiClient {
     fun redeem(
         pairingToken: String,
@@ -85,11 +89,25 @@ class PairingApiClient {
             val response = try {
                 JSONObject(responseText)
             } catch (_: JSONException) {
+                if (responseCode !in 200..299) {
+                    throw PairingApiResponseException(
+                        responseCode,
+                        "The server returned an invalid error response."
+                    )
+                }
                 throw IOException("Pairing server returned an invalid response.")
             }
             val status = response.optString("status")
-            if (status.isBlank()) throw IOException("Pairing server returned an invalid response.")
-            if (responseCode >= 500) throw IOException("Pairing server is temporarily unavailable.")
+            if (responseCode >= 500 || status.isBlank()) {
+                val serverError = response.optString("error").takeIf { it.isNotBlank() }
+                val message = serverError
+                    ?: if (responseCode >= 500) {
+                        "Pairing server is temporarily unavailable."
+                    } else {
+                        "The server returned an invalid response."
+                    }
+                throw PairingApiResponseException(responseCode, message)
+            }
             return PairingApiResult(status, response.optBoolean("retry"))
         } finally {
             connection.disconnect()

@@ -296,6 +296,8 @@ class MainActivity : Activity() {
                 message = error.message ?: "Phone pairing could not be completed."
             } catch (error: IllegalStateException) {
                 message = error.message ?: "Phone pairing could not be completed."
+            } catch (error: PairingApiResponseException) {
+                message = error.message ?: "The pairing server returned an error."
             } catch (_: IOException) {
                 message = "The secure connection failed. Check your connection and try again."
             } catch (_: GeneralSecurityException) {
