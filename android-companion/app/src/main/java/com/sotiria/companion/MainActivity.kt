@@ -131,7 +131,7 @@ class MainActivity : Activity() {
         pairingCard.addView(pairingStatus, matchWidthWrapHeight())
         pairingCodeInput = EditText(this).apply {
             hint = "One-time pairing code"
-            singleLine = true
+            setSingleLine(true)
             inputType = android.text.InputType.TYPE_CLASS_TEXT or
                 android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
             setTextSize(15f)
