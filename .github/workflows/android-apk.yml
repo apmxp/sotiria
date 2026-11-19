@@ -35,9 +35,11 @@ jobs:
 
       - name: Build debug APK
         working-directory: android-companion
+        env:
+          SOTIRIA_PAIRING_API_BASE_URL: ${{ vars.SOTIRIA_PAIRING_API_BASE_URL }}
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleDebug
+          ./gradlew "-PsotiriaPairingApiBaseUrl=$SOTIRIA_PAIRING_API_BASE_URL" :app:assembleDebug
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
