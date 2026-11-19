@@ -175,7 +175,7 @@ class MainActivity : Activity() {
         content.addView(usageRows, matchWidthWrapHeight())
 
         return ScrollView(this).apply {
-            fillViewport = true
+            setFillViewport(true)
             addView(
                 content,
                 ViewGroup.LayoutParams(
