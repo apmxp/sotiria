@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useServerFn } from '@tanstack/react-start';
@@ -78,6 +78,7 @@ export function FamilyManagement() {
   const [pairingOpen, setPairingOpen] = useState(false);
   const [pairingFlow, setPairingFlow] = useState<PairingFlow | null>(null);
   const [pairingPreparing, setPairingPreparing] = useState(false);
+  const pairingStartInFlight = useRef(false);
   const refresh = () => cache.invalidateQueries({ queryKey: ['identity-family'] });
   const setupMutation = useMutation({ mutationFn: () => setup({ data: { name: familyName } }), onSuccess: refresh, onError: () => toast.error('Your family could not be created. Please try again.') });
   const saveMutation = useMutation({ mutationFn: async () => { if (!familyData?.family) throw new Error('Family required'); return save({ data: { id, familyId: familyData.family.id, displayName: name, avatar, pin: pinValue || undefined, active } }); }, onSuccess: () => { setOpen(false); setPin(''); void refresh(); toast.success('Child profile saved.'); }, onError: () => toast.error('Check the nickname and six-digit PIN, then try again.') });
@@ -100,11 +101,12 @@ export function FamilyManagement() {
           return { ...withoutPendingPairing(current), unavailableStatus: 'pairing_expired' };
         }
         const activatedOrPending = {
-          ...withoutPendingPairing(current),
+          ...current,
           pairingId: result.pairingId,
           expiresAt: result.expiresAt,
           reportingTimezone: result.reportingTimezone,
         };
+        delete activatedOrPending.request;
         delete activatedOrPending.unavailableStatus;
         return activatedOrPending;
       });
@@ -134,6 +136,11 @@ export function FamilyManagement() {
     }
   }, [pairingStatusQuery.data?.status]);
   const startPairing = async (child: FamilyChild, forceNew = false) => {
+    if (pairingStartInFlight.current) {
+      setPairingOpen(true);
+      return;
+    }
+
     const currentStatus = pairingStatusQuery.data?.status;
     if (
       !forceNew
@@ -147,6 +154,17 @@ export function FamilyManagement() {
       return;
     }
 
+    if (
+      !forceNew
+      && pairingFlow?.childId === child.id
+      && pairingFlow.unavailableStatus === 'pairing_open'
+      && (!pairingFlow.expiresAt || !Number.isFinite(Date.parse(pairingFlow.expiresAt)) || Date.parse(pairingFlow.expiresAt) > Date.now())
+    ) {
+      setPairingOpen(true);
+      return;
+    }
+
+    pairingStartInFlight.current = true;
     setPairingOpen(true);
     setPairingPreparing(true);
     try {
@@ -167,12 +185,17 @@ export function FamilyManagement() {
         timezone,
       };
       setPairingFlow({ childId: child.id, childName: child.display_name, token, request });
-      pairingMutation.mutate(request);
+      pairingMutation.mutate(request, {
+        onSettled: () => {
+          pairingStartInFlight.current = false;
+          setPairingPreparing(false);
+        },
+      });
     } catch {
+      pairingStartInFlight.current = false;
+      setPairingPreparing(false);
       toast.error('A secure pairing code could not be created in this browser.');
       setPairingOpen(false);
-    } finally {
-      setPairingPreparing(false);
     }
   };
   const retryPairing = () => {
@@ -188,7 +211,7 @@ export function FamilyManagement() {
   };
   return <Panel title={familyData.family.name} action={<Button variant="ghost" size="sm" onClick={() => { setId(undefined); setName(''); setAvatar('🌱'); setPin(''); setActive(true); setOpen(true); }}><Plus />Add child</Button>}>
     {children.length > 0 && <label className="field">Child in your overview<select aria-label="Child in your overview" value={selected ?? children[0]?.id} onChange={e => selectChild(e.target.value)}>{children.map(c => <option key={c.id} value={c.id}>{c.display_name}{!c.is_active ? ' · inactive' : ''}</option>)}</select></label>}
-    {children.map(c => <div className="history-row" key={c.id}><span className="avatar">{c.avatar}</span><div className="min-w-0 flex-1"><strong>{c.display_name}</strong><p>{c.is_active ? 'Active profile' : 'Inactive profile'}</p></div>{c.is_active && <Button variant="outline" size="sm" onClick={() => void startPairing(c)} disabled={pairingPreparing || (pairingMutation.isPending && pairingFlow?.childId !== c.id)}><Smartphone />Connect phone</Button>}<Button variant="ghost" size="icon" aria-label={`Edit ${c.display_name}`} onClick={() => { setId(c.id); setName(c.display_name); setAvatar(c.avatar); setPin(''); setActive(c.is_active); setOpen(true); }}><Pencil /></Button></div>)}
+    {children.map(c => <div className="history-row" key={c.id}><span className="avatar">{c.avatar}</span><div className="min-w-0 flex-1"><strong>{c.display_name}</strong><p>{c.is_active ? 'Active profile' : 'Inactive profile'}</p></div>{c.is_active && <Button variant="outline" size="sm" onClick={() => void startPairing(c)} disabled={pairingPreparing || pairingMutation.isPending}><Smartphone />Connect phone</Button>}<Button variant="ghost" size="icon" aria-label={`Edit ${c.display_name}`} onClick={() => { setId(c.id); setName(c.display_name); setAvatar(c.avatar); setPin(''); setActive(c.is_active); setOpen(true); }}><Pencil /></Button></div>)}
     {!children.length && <p className="panel-subtitle">Add your child’s nickname and PIN.</p>}
     <Button className="mt-4" variant="wellbeing" disabled={!children.some(c => c.is_active) || pickerMutation.isPending} onClick={() => pickerMutation.mutate()}>Open child space <ArrowRight /></Button>
     <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) setPin(''); }}><DialogContent><DialogHeader><DialogTitle>{id ? 'Edit child profile' : 'Add child profile'}</DialogTitle><DialogDescription>A nickname is enough. Keep the PIN between you and your child.</DialogDescription></DialogHeader><form className="space-y-4" onSubmit={e => { e.preventDefault(); saveMutation.mutate(); }}><label className="field">Nickname<input required maxLength={30} value={name} onChange={e => setName(e.target.value)} /></label><label className="field">Avatar<select value={avatar} onChange={e => setAvatar(e.target.value)}>{avatarOptions.map(a => <option key={a}>{a}</option>)}</select></label><label className="field">{id ? 'New PIN (leave blank to keep it)' : 'Six-digit PIN'}<input type="password" inputMode="numeric" autoComplete="new-password" required={!id} pattern="[0-9]{6}" maxLength={6} value={pinValue} onChange={e => setPin(e.target.value.replace(/\D/g, ''))} /></label><label className="flex gap-2 items-center"><input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} />Active profile</label><Button type="submit" disabled={saveMutation.isPending}>Save profile <Check /></Button></form></DialogContent></Dialog>
@@ -200,7 +223,7 @@ export function FamilyManagement() {
             This code authorizes one phone for this profile and expires after 10 minutes. A replacement phone does not replace the current one until activation succeeds.
           </DialogDescription>
         </DialogHeader>
-        {pairingFlow?.token && !pairingExpired && pairingStatusQuery.data?.status !== 'activated' && <>
+        {pairingFlow?.token && pairingFlow.pairingId && !pairingExpired && pairingStatusQuery.data?.status !== 'activated' && <>
           <div className="space-y-3">
             <p className="panel-subtitle">On the Android companion, enter this one-time code:</p>
             <code className="block break-all rounded-lg bg-muted p-3 text-sm">{pairingFlow.token}</code>
@@ -215,16 +238,17 @@ export function FamilyManagement() {
               }}>Copy code</Button>
             </div>
             {pairingFlow.expiresAt && <p className="panel-subtitle">Expires {new Date(pairingFlow.expiresAt).toLocaleTimeString()} · reporting time zone {pairingFlow.reportingTimezone}</p>}
-            {!pairingFlow.pairingId && <div role="status" className="panel-subtitle">{pairingMutation.isPending ? 'Creating a secure pairing…' : 'Pairing could not be confirmed yet.'}{!pairingMutation.isPending && <Button variant="link" onClick={retryPairing}>Retry</Button>}</div>}
             {pairingFlow.pairingId && pairingStatusQuery.data?.status === 'redeemed' && <p role="status" className="panel-subtitle">The phone is verifying its secure credential…</p>}
             {pairingFlow.pairingId && pairingStatusQuery.data?.status === 'pending' && <p role="status" className="panel-subtitle">Waiting for the Android phone to use this code…</p>}
             {pairingFlow.pairingId && ['expired', 'cancelled'].includes(pairingStatusQuery.data?.status ?? '') && <p role="status" className="panel-subtitle">This pairing code is no longer active. Close this window and start a new pairing.</p>}
             {pairingFlow.pairingId && pairingStatusQuery.isError && <p role="status" className="panel-subtitle">Pairing status is temporarily unavailable. This window will keep checking.</p>}
           </div>
         </>}
+        {pairingFlow?.token && !pairingFlow.pairingId && !pairingFlow.unavailableStatus && <p role="status" className="panel-subtitle">
+          {pairingMutation.isPending ? 'Creating a secure pairing…' : <>Pairing could not be confirmed yet. <Button variant="link" onClick={retryPairing}>Retry</Button></>}
+        </p>}
         {pairingFlow?.unavailableStatus === 'pairing_open' && <>
-          <p role="status" className="panel-subtitle">Another pairing is already open for this profile until {pairingFlow.expiresAt ? new Date(pairingFlow.expiresAt).toLocaleTimeString() : 'it expires'}.</p>
-          <Button variant="outline" disabled={pairingPreparing || pairingMutation.isPending} onClick={startNewPairing}>Try a new code</Button>
+          <p role="status" className="panel-subtitle">Another pairing is already open for this profile until {pairingFlow.expiresAt ? new Date(pairingFlow.expiresAt).toLocaleTimeString() : 'it expires'}. Its code cannot be recovered here. After it expires, close this window and start a new pairing.</p>
         </>}
         {pairingFlow?.unavailableStatus === 'pairing_expired' && <>
           <p role="status" className="panel-subtitle">That pairing attempt expired. Create a new code to try again.</p>
