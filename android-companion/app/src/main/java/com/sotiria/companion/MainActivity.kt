@@ -93,7 +93,7 @@ class MainActivity : Activity() {
             "Online safety" to Screen.SAFETY
         ).forEach { (label, screen) ->
             dashboardNavigation.addView(
-                Button(this).apply {
+               Button(this@MainActivity).apply {
                     text = label
                     textSize = 11f
                     minWidth = 0
@@ -115,7 +115,7 @@ class MainActivity : Activity() {
         loadingStatus = bodyText("Checking this phone’s authorization…")
         loadingSection.addView(loadingStatus, matchWidthWrapHeight())
         loadingSection.addView(
-            Button(this).apply {
+            Button(this@MainActivity).apply {
                 text = "Try again"
                 setOnClickListener { refreshDashboard() }
             },
@@ -168,13 +168,13 @@ class MainActivity : Activity() {
         usageRows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         homeSection.addView(usageRows, matchWidthWrapHeight())
 
-        dashboardRefresh = Button(this).apply {
+        dashboardRefresh = Button(this@MainActivity).apply {
             text = "Refresh today’s dashboard"
             setOnClickListener { refreshDashboard() }
         }
         homeSection.addView(dashboardRefresh, matchWidthWrapHeight())
         homeSection.addView(
-            Button(this).apply {
+            Button(this@MainActivity).apply {
                 text = "Usage Access settings"
                 setOnClickListener { openUsageAccessSettings() }
             },
@@ -192,7 +192,7 @@ class MainActivity : Activity() {
         }
         screenTimeSection.addView(heading("My screen time"), matchWidthWrapHeight())
         screenTimeSection.addView(bodyText("See today’s included app time and your progress toward the family goal."), matchWidthWrapHeight())
-        screenTimeSection.addView(Button(this).apply {
+        screenTimeSection.addView(Button(this@MainActivity).apply {
             text = "Refresh screen time"
             setOnClickListener { refreshDashboard() }
         }, matchWidthWrapHeight())
@@ -229,7 +229,7 @@ class MainActivity : Activity() {
         )
         pairingStatus = bodyText("Your parent can create a code from the child’s family profile.")
         addView(pairingStatus, matchWidthWrapHeight())
-        pairingCodeInput = EditText(this).apply {
+        pairingCodeInput = EditText(this@MainActivity).apply {
             hint = "One-time pairing code"
             setSingleLine(true)
             inputType = android.text.InputType.TYPE_CLASS_TEXT or
@@ -238,7 +238,7 @@ class MainActivity : Activity() {
             setPadding(dp(12), dp(10), dp(12), dp(10))
         }
         addView(pairingCodeInput, matchWidthWrapHeight())
-        pairingButton = Button(this).apply {
+        pairingButton = Button(this@MainActivity).apply {
             text = "Connect this phone"
             setOnClickListener { connectPhone() }
         }
@@ -508,7 +508,7 @@ class MainActivity : Activity() {
                 matchWidthWrapHeight().apply { bottomMargin = dp(8) }
             )
             usageRows.addView(
-                Button(this).apply {
+                Button(this@MainActivity).apply {
                     text = "Discard saved snapshots"
                     setOnClickListener { confirmDiscardRecoverableUsageSnapshots() }
                 },
