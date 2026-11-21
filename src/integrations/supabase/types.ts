@@ -761,6 +761,18 @@ export type Database = {
         Args: { p_child_id: string; p_pairing_id: string }
         Returns: Json
       }
+      get_android_child_device_profile: {
+        Args: { p_device_token_hash: string }
+        Returns: Json
+      }
+      get_android_child_space: {
+        Args: { p_device_token_hash: string }
+        Returns: Json
+      }
+      get_parent_android_device_overview: {
+        Args: { p_child_id: string }
+        Returns: Json
+      }
       get_family_children: {
         Args: { p_family_id: string }
         Returns: {
@@ -796,6 +808,27 @@ export type Database = {
       is_child_parent: { Args: { p_child: string }; Returns: boolean }
       is_family_parent: { Args: { p_family: string }; Returns: boolean }
       is_routine_parent: { Args: { p_routine: string }; Returns: boolean }
+      ingest_android_child_usage_snapshot: {
+        Args: { p_apps: Json; p_device_token_hash: string; p_ticket_hash: string }
+        Returns: Json
+      }
+      issue_android_child_usage_snapshot: {
+        Args: {
+          p_device_token_hash: string
+          p_issue_request_hash: string
+          p_ticket_hash?: string | null
+          p_ticket_key_id: string
+        }
+        Returns: Json
+      }
+      save_android_child_mood: {
+        Args: { p_device_token_hash: string; p_mood: string }
+        Returns: Json
+      }
+      complete_android_child_activity: {
+        Args: { p_device_token_hash: string; p_activity_key: string }
+        Returns: Json
+      }
       manage_child_authorized: {
         Args: {
           p_active: boolean

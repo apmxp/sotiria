@@ -9,6 +9,15 @@ describe("Android usage migration security contracts", () => {
   const schema = migration("20261119090000_android_usage_schema.sql");
   const rpcs = migration("20261119090100_android_usage_rpcs.sql");
   const existingDevices = migration("20261118200000_create_child_devices.sql");
+  const childExperience = migration("20261120090000_android_child_experience.sql");
+  const issueRpc = childExperience.slice(
+    childExperience.indexOf("CREATE OR REPLACE FUNCTION public.issue_android_child_usage_snapshot("),
+    childExperience.indexOf("CREATE OR REPLACE FUNCTION public.ingest_android_child_usage_snapshot("),
+  );
+  const ingestRpc = childExperience.slice(
+    childExperience.indexOf("CREATE OR REPLACE FUNCTION public.ingest_android_child_usage_snapshot("),
+    childExperience.indexOf("CREATE OR REPLACE FUNCTION public.get_parent_android_device_overview("),
+  );
 
   it("allows permanent child deletion to cascade Android records without changing deactivation behavior", () => {
     expect(schema).toContain("REFERENCES public.child_profiles(id)\n    ON DELETE CASCADE");
@@ -107,5 +116,71 @@ describe("Android usage migration security contracts", () => {
     expect(createRpc).toContain("v_key_id IS DISTINCT FROM p_pairing_key_id");
     expect(createRpc).toContain("'status', 'pairing_open'");
     expect(createRpc).toContain("'expires_at', v_open_expires");
+  });
+
+  it("saves accepted metadata and restores the same issue revision", () => {
+    expect(issueRpc).toContain("v_old_accepted_at timestamptz;");
+    expect(issueRpc).toContain("v_old_payload_hash text;");
+    expect(issueRpc).toContain(
+      "SELECT u.revision, u.issue_request_hash, u.state,\n         u.accepted_at, u.payload_hash\n  INTO v_old_revision, v_old_request_hash, v_old_state,\n       v_old_accepted_at, v_old_payload_hash",
+    );
+    expect(issueRpc).toContain(
+      "SET state = 'replaced',\n        accepted_at = NULL,\n        payload_hash = NULL",
+    );
+    expect(issueRpc).toContain(
+      "SET state = 'accepted',\n        accepted_at = v_old_accepted_at,\n        payload_hash = v_old_payload_hash\n    WHERE child_id = v_child_id\n      AND usage_date = v_usage_date\n      AND revision = v_old_revision\n      AND state = 'replaced';",
+    );
+  });
+
+  it("raises when the locked issue revision cannot be restored", () => {
+    expect(issueRpc).toContain("v_restored_rows bigint;");
+    expect(issueRpc).toContain("GET DIAGNOSTICS v_restored_rows = ROW_COUNT;");
+    expect(issueRpc).toContain(
+      "IF v_restored_rows <> 1 THEN\n      RAISE EXCEPTION 'Accepted usage snapshot could not be restored'\n        USING ERRCODE = 'check_violation';",
+    );
+  });
+
+  it("clears accepted metadata inside the ingestion exception subtransaction", () => {
+    expect(ingestRpc).toContain(
+      "  BEGIN\n    UPDATE public.child_device_usage_days\n    SET state = 'replaced',\n        accepted_at = NULL,\n        payload_hash = NULL\n    WHERE child_id = v_child_id\n      AND usage_date = v_usage_date\n      AND revision = v_old_revision;\n\n    v_result := public.ingest_child_usage_snapshot(",
+    );
+  });
+
+  it("raises on non-accepted ingestion results so the replacement rolls back", () => {
+    expect(ingestRpc).toContain(
+      "IF v_result->>'status' IS DISTINCT FROM 'accepted' THEN\n      RAISE EXCEPTION 'Snapshot was not accepted'\n        USING ERRCODE = 'Z0001';\n    END IF;\n  EXCEPTION\n    WHEN SQLSTATE 'Z0001' THEN\n      RETURN v_result;\n  END;",
+    );
+  });
+
+  it("leaves successful ingestion replacement to the base RPC", () => {
+    expect(ingestRpc).toContain(
+      "v_result := public.ingest_child_usage_snapshot(\n      p_device_token_hash,\n      p_ticket_hash,\n      p_apps\n    );",
+    );
+    expect(ingestRpc).not.toContain("SET state = 'accepted'");
+    expect(rpcs).toContain("SET state = 'accepted',\n      accepted_at = clock_timestamp(),\n      payload_hash = v_payload_hash");
+  });
+
+  it("preserves the original state-fields constraint", () => {
+    expect(schema).toContain(
+      "(state IN ('expired', 'replaced', 'revoked')\n      AND accepted_at IS NULL\n      AND payload_hash IS NULL)",
+    );
+    expect(childExperience).not.toContain("child_device_usage_days_state_fields_check");
+  });
+
+  it("preserves snapshot RPC signatures, security settings, and grants", () => {
+    expect(issueRpc).toContain(
+      "CREATE OR REPLACE FUNCTION public.issue_android_child_usage_snapshot(\n  p_device_token_hash text,\n  p_issue_request_hash text,\n  p_ticket_key_id text,\n  p_ticket_hash text DEFAULT NULL\n) RETURNS jsonb",
+    );
+    expect(issueRpc).toContain("SECURITY DEFINER\nSET search_path = pg_catalog, public");
+    expect(ingestRpc).toContain(
+      "CREATE OR REPLACE FUNCTION public.ingest_android_child_usage_snapshot(\n  p_device_token_hash text,\n  p_ticket_hash text,\n  p_apps jsonb\n) RETURNS jsonb",
+    );
+    expect(ingestRpc).toContain("SECURITY DEFINER\nSET search_path = pg_catalog, public");
+    expect(childExperience).toContain(
+      "REVOKE ALL ON FUNCTION public.issue_android_child_usage_snapshot(text, text, text, text)\n  FROM PUBLIC, anon, authenticated;\nGRANT EXECUTE ON FUNCTION public.issue_android_child_usage_snapshot(text, text, text, text)\n  TO service_role;",
+    );
+    expect(childExperience).toContain(
+      "REVOKE ALL ON FUNCTION public.ingest_android_child_usage_snapshot(text, text, jsonb)\n  FROM PUBLIC, anon, authenticated;\nGRANT EXECUTE ON FUNCTION public.ingest_android_child_usage_snapshot(text, text, jsonb)\n  TO service_role;",
+    );
   });
 });

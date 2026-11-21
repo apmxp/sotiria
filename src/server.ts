@@ -2,6 +2,9 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import type { Database } from "./integrations/supabase/types";
+
+type SupabaseFunctions = Database["public"]["Functions"];
 
 type ServerEntry = {
   fetch: (request: Request, env: Env, ctx: unknown) => Promise<Response> | Response;
@@ -50,23 +53,51 @@ function isH3SwallowedErrorBody(body: string): boolean {
 export default {
   async fetch(request: Request, env: Env, ctx: unknown) {
     try {
-            const { pathname } = new URL(request.url);
-            if (
-              pathname === "/api/android/pairing/redeem" ||
-              pathname === "/api/android/pairing/activate"
-            ) {
-              const [{ handleAndroidPairingRequest }, { supabaseAdmin }] = await Promise.all([
-                import("./lib/android-pairing.api.server"),
-                import("./integrations/supabase/client.server"),
-              ]);
-              const response = await handleAndroidPairingRequest(request, {
-                redeem: (args) => supabaseAdmin.rpc("redeem_child_device_pairing", args),
-                activate: (args) => supabaseAdmin.rpc("activate_child_device_pairing", args),
-              });
-              if (response) return response;
-            }
+      const { pathname } = new URL(request.url);
+      if (
+        pathname === "/api/android/pairing/redeem" ||
+        pathname === "/api/android/pairing/activate" ||
+        pathname === "/api/android/device/profile" ||
+        pathname === "/api/android/usage/snapshot" ||
+        pathname === "/api/android/child-space/today" ||
+        pathname === "/api/android/child-space/activities" ||
+        pathname === "/api/android/child-space/mood" ||
+        pathname === "/api/android/child-space/activities/complete"
+      ) {
+        const [{ handleAndroidPairingRequest }, { handleAndroidDeviceRequest }, { supabaseAdmin }] =
+          await Promise.all([
+            import("./lib/android-pairing.api.server"),
+            import("./lib/android-device.api.server"),
+            import("./integrations/supabase/client.server"),
+          ]);
+        const rpc = {
+          redeem: (args: SupabaseFunctions["redeem_child_device_pairing"]["Args"]) =>
+            supabaseAdmin.rpc("redeem_child_device_pairing", args),
+          activate: (args: SupabaseFunctions["activate_child_device_pairing"]["Args"]) =>
+            supabaseAdmin.rpc("activate_child_device_pairing", args),
+        };
+        const response =
+          (await handleAndroidPairingRequest(request, rpc)) ??
+          (await handleAndroidDeviceRequest(request, {
+            ...rpc,
+            profile: (args: SupabaseFunctions["get_android_child_device_profile"]["Args"]) =>
+              supabaseAdmin.rpc("get_android_child_device_profile", args),
+            issue: (args: SupabaseFunctions["issue_android_child_usage_snapshot"]["Args"]) =>
+              supabaseAdmin.rpc("issue_android_child_usage_snapshot", args),
+            ingest: (args: SupabaseFunctions["ingest_android_child_usage_snapshot"]["Args"]) =>
+              supabaseAdmin.rpc("ingest_android_child_usage_snapshot", args),
+            childSpace: (args: SupabaseFunctions["get_android_child_space"]["Args"]) =>
+              supabaseAdmin.rpc("get_android_child_space", args),
+            saveMood: (args: SupabaseFunctions["save_android_child_mood"]["Args"]) =>
+              supabaseAdmin.rpc("save_android_child_mood", args),
+            completeActivity: (
+              args: SupabaseFunctions["complete_android_child_activity"]["Args"],
+            ) => supabaseAdmin.rpc("complete_android_child_activity", args),
+          }));
+        if (response) return response;
+      }
 
-            const handler = await getServerEntry();
+      const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
