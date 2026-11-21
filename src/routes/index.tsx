@@ -1,4 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { HomePage } from '@/components/sotiria/marketing';
-import { pageHead } from '@/lib/metadata';
-export const Route = createFileRoute('/')({ head: () => pageHead('Your digital world, in balance', 'Discover healthier digital habits, understand your feelings, stay safe online, and make room for the things you love offline.'), component: HomePage });
+import { DEVELOPER_NAME, pageHead, SOTIRIA_STRUCTURED_DATA } from '@/lib/metadata';
+export const Route = createFileRoute('/')({ head: () => pageHead('Sotiría App for Child Digital Wellbeing', 'Sotiría is an Android app for child digital wellbeing, helping children and families build balanced screen-time habits, stay safe online, and make room for offline life.', { path: '/', indexable: true, author: DEVELOPER_NAME, structuredData: SOTIRIA_STRUCTURED_DATA }), component: HomePage });

@@ -1,4 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { MarketingPage } from '@/components/sotiria/marketing';
 import { pageHead } from '@/lib/metadata';
-export const Route = createFileRoute('/features')({ head: () => pageHead('Features', 'Five thoughtful ways Sotiría helps children build balanced digital habits: screen-time balance, mood check-ins, online safety, offline adventures, and parent guidance.'), component: () => <MarketingPage type="features" /> });
+export const Route = createFileRoute('/features')({ head: () => pageHead('Sotiría Features for Child Wellbeing', 'Explore Sotiría app features for children’s digital wellbeing, including Android screen-time insights, private mood reflections, online safety, offline activities, and parent guidance.', { path: '/features', indexable: true }), component: () => <MarketingPage type="features" /> });

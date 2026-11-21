@@ -86,6 +86,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Sotiría — Grow safely. Live fully." },
       { name: "description", content: "A kinder approach to digital wellbeing for children and families." },
+      { name: "robots", content: "noindex,nofollow" },
       { name: "author", content: "Sotiría" },
       { property: "og:title", content: "Sotiría — Grow safely. Live fully." },
       { property: "og:description", content: "Build balanced digital habits together." },
