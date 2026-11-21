@@ -8,10 +8,26 @@ import java.net.URI
 import java.net.URISyntaxException
 import java.net.URL
 import java.security.MessageDigest
+import org.json.JSONArray
 
 data class PairingApiResult(
     val status: String,
     val retry: Boolean
+)
+
+data class DeviceProfile(
+    val displayName: String,
+    val avatar: String,
+    val timezone: String,
+    val usageDate: String,
+    val goalMinutes: Int?
+)
+
+data class DeviceUsageApp(
+    val packageName: String,
+    val displayName: String,
+    val category: String,
+    val durationMinutes: Int
 )
 
 class PairingApiException(val pairingStatus: String) : IOException(
@@ -20,8 +36,18 @@ class PairingApiException(val pairingStatus: String) : IOException(
         "pairing_expired" -> "This pairing code has expired. Ask the parent for a new one."
         "child_inactive" -> "This child profile is inactive."
         "device_revoked" -> "This phone has been revoked."
+        "invalid_device" -> "This phone is no longer authorized. Ask the parent to authorize it again."
         "invalid_pending_credential" -> "The saved pairing could not be verified. Start again with a new code."
-        else -> "This pairing is no longer available. Ask the parent to start a new one."
+        "ticket_expired" -> "The usage upload expired. Refresh the dashboard to try again."
+        "ticket_issue_expired" -> "The usage upload setup expired. Refresh the dashboard to try again."
+        "ticket_replaced" -> "A newer usage upload replaced this one. Refresh the dashboard to try again."
+        "ticket_conflict" -> "The usage upload changed while it was being sent. Refresh the dashboard to try again."
+        "payload_conflict" -> "The usage upload could not be verified. Refresh the dashboard to try again."
+        "collection_window_closed" -> "This reporting day is no longer open for upload."
+        "timezone_required" -> "Ask your parent to reconnect this phone before syncing usage."
+        "usage_day_changed" -> "The reporting day changed. Refresh the dashboard to try again."
+        "configuration_error" -> "The pairing server URL is not configured correctly. Install a configured app build."
+        else -> "This request could not be completed. Refresh the dashboard or ask your parent for help."
     }
 )
 
@@ -41,25 +67,66 @@ class PairingApiClient {
             .put("pendingTokenHash", pendingTokenHash)
             .put("credentialKeyId", CREDENTIAL_KEY_ID)
             .put("deviceName", deviceName)
-    )
+    ).toPairingResult()
 
     fun activate(pendingTokenHash: String, deviceTokenHash: String): PairingApiResult = post(
         "/api/android/pairing/activate",
         JSONObject()
             .put("pendingTokenHash", pendingTokenHash)
             .put("deviceTokenHash", deviceTokenHash)
-    )
+    ).toPairingResult()
 
-    private fun post(path: String, body: JSONObject): PairingApiResult {
+    fun profile(deviceToken: String): DeviceProfile {
+        val response = post(
+            "/api/android/device/profile",
+            JSONObject().put("deviceToken", deviceToken)
+        )
+        response.requireOk()
+        return DeviceProfile(
+            displayName = response.getString("displayName"),
+            avatar = response.getString("avatar"),
+            timezone = response.getString("timezone"),
+            usageDate = response.getString("usageDate"),
+            goalMinutes = if (response.isNull("goalMinutes")) null else response.getInt("goalMinutes")
+        )
+    }
+
+    fun uploadSnapshot(
+        deviceToken: String,
+        upload: PendingUsageUpload,
+        apps: List<DeviceUsageApp>
+    ): PairingApiResult {
+        val appArray = JSONArray()
+        apps.forEach { app ->
+            appArray.put(
+                JSONObject()
+                    .put("package", app.packageName)
+                    .put("app_name", app.displayName)
+                    .put("category", app.category)
+                    .put("duration_minutes", app.durationMinutes)
+            )
+        }
+        return post(
+            "/api/android/usage/snapshot",
+            JSONObject()
+                .put("deviceToken", deviceToken)
+                .put("issueRequestToken", upload.issueRequestToken)
+                .put("ticketToken", upload.ticketToken)
+                .put("usageDate", upload.usageDate)
+                .put("apps", appArray)
+        ).toPairingResult()
+    }
+
+    private fun post(path: String, body: JSONObject): JSONObject {
         val base = BuildConfig.PAIRING_API_BASE_URL.trimEnd('/')
         if (base.isBlank()) {
-            throw IllegalStateException("Pairing server URL has not been configured.")
+            throw PairingApiException("configuration_error")
         }
 
         val uri = try {
             URI(base)
         } catch (_: URISyntaxException) {
-            throw IllegalStateException("Pairing server URL is invalid.")
+            throw PairingApiException("configuration_error")
         }
         val localHttp = uri.host == "localhost" || uri.host == "127.0.0.1"
         if (
@@ -67,7 +134,7 @@ class PairingApiClient {
             uri.rawUserInfo != null || uri.query != null || uri.fragment != null ||
             (uri.scheme != "https" && !(uri.scheme == "http" && localHttp))
         ) {
-            throw IllegalStateException("Pairing server must use HTTPS.")
+            throw PairingApiException("configuration_error")
         }
 
         val connection = URL("$base$path").openConnection() as HttpURLConnection
@@ -108,10 +175,18 @@ class PairingApiClient {
                     }
                 throw PairingApiResponseException(responseCode, message)
             }
-            return PairingApiResult(status, response.optBoolean("retry"))
+            return response
         } finally {
             connection.disconnect()
         }
+    }
+
+    private fun JSONObject.toPairingResult(): PairingApiResult =
+        PairingApiResult(optString("status"), optBoolean("retry"))
+
+    private fun JSONObject.requireOk() {
+        val status = optString("status")
+        if (status != "ok") throw PairingApiException(status)
     }
 
     companion object {

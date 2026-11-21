@@ -33,6 +33,19 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Validate pairing API URL
+        env:
+          SOTIRIA_PAIRING_API_BASE_URL: ${{ vars.SOTIRIA_PAIRING_API_BASE_URL }}
+        run: |
+          if [ -z "$SOTIRIA_PAIRING_API_BASE_URL" ]; then
+            echo "::error::SOTIRIA_PAIRING_API_BASE_URL is missing or empty"
+            exit 1
+          fi
+          if [ "$SOTIRIA_PAIRING_API_BASE_URL" != "https://sotiria.ap12app12.workers.dev" ]; then
+            echo "::error::SOTIRIA_PAIRING_API_BASE_URL must be exactly https://sotiria.ap12app12.workers.dev"
+            exit 1
+          fi
+
       - name: Build debug APK
         working-directory: android-companion
         env:
